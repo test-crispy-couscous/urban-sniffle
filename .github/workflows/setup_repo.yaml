@@ -1,0 +1,59 @@
+name: Setup Repo
+
+on:
+  create:
+
+env:
+  SONAR_CLOUD_QUALITY_GATE_ID: 9
+  SONAR_CLOUD_ORGANIZATION: test-crispy-couscous
+
+jobs:
+  initialize:
+    name: Run template
+    runs-on: ubuntu-latest
+    if: github.event.repository.name != 'django-template' # remember to change in other places
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.4.2
+
+      - name: Remove workflows
+        shell: bash
+        run: |
+          rm -rf ./github/workflows
+      - name: Commit & push changes
+        shell: bash
+        run: |
+          git config user.name "${GITHUB_ACTOR}" && \
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com" && \
+          git add . && \
+          git commit -m 'chore: remove setup workflows' && \
+          git push origin
+  sonar-configuration:
+    name: Create SonarCloud project
+    if: github.event.repository.name != 'django-template' # remember to change in other places
+    runs-on: ubuntu-latest
+    needs: initialize
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.4.2
+      - name: Setup Python Version
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade requests python-sonarqube-api PyGithub
+
+      - name: Add SonarCloud project
+        shell: bash
+        env:
+          sonar_cloud_access_token: ${{ secrets.SONAR_ACCESS_TOKEN }}
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          python .github/workflows/add_repository_sonar_cloud.py \
+            --repository-name ${{ github.event.repository.full_name }} \
+            --github-access-token "$github_access_token" \
+            --sonar-cloud-access-token "$sonar_cloud_access_token" \
+            --sonar-cloud-organization "$SONAR_CLOUD_ORGANIZATION" \
+            --sonar-cloud-quality-gate-id $SONAR_CLOUD_QUALITY_GATE_ID
